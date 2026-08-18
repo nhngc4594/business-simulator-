@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>TIPPING — a toy model of preferential attachment dynamics</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --void:#0A0C10;
+    --panel:#12151B;
+    --panel-raised:#171B22;
+    --line:#242A34;
+    --line-bright:#343C4A;
+    --text:#E7EAEE;
+    --dim:#828C9A;
+    --dimmer:#54606F;
+    --firm-a:#4FE3C4;
+    --firm-a-dim:#2A6B5E;
+    --firm-b:#FF9C52;
+    --firm-b-dim:#8A5228;
+    --danger:#FF4F6E;
+    --mono:'JetBrains Mono', ui-monospace, monospace;
+    --sans:'Inter', -apple-system, sans-serif;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;background:var(--void);color:var(--text);font-family:var(--sans);}
+  body{
+    min-height:100vh;
+    padding:18px;
+    background-image:
+      radial-gradient(ellipse 900px 500px at 15% -10%, rgba(79,227,196,0.06), transparent),
+      radial-gradient(ellipse 900px 500px at 85% 110%, rgba(255,156,82,0.05), transparent);
+  }
+  .wrap{max-width:1180px;margin:0 auto;}
+
+  /* ---------- Header ---------- */
+  header{
+    display:flex; flex-direction:column; gap:4px;
+    padding:2px 4px 20px 4px;
+    border-bottom:1px solid var(--line);
+    margin-bottom:20px;
+  }
+  .eyebrow{
+    font-family:var(--mono); font-size:11px; letter-spacing:0.14em; text-transform:uppercase;
+    color:var(--dim); display:flex; align-items:center; gap:8px;
+  }
+  .eyebrow::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--firm-a);box-shadow:0 0 8px var(--firm-a);}
+  h1{
+    font-family:var(--mono); font-weight:700; font-size:clamp(22px,4vw,32px);
+    margin:2px 0 4px 0; letter-spacing:-0.01em;
+  }
+  h1 span{color:var(--dim); font-weight:500;}
+  .sub{color:var(--dim); font-size:14px; max-width:640px; line-height:1.5;}
+
+  /* ---------- Layout ---------- */
+  .grid{
+    display:grid;
+    grid-template-columns: 300px 1fr;
+    gap:16px;
+  }
+  @media (max-width:880px){
+    .grid{grid-template-columns:1fr;}
+  }
+
+  .panel{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:16px;
+  }
+
+  /* ---------- Channel strips (controls) ---------- */
+  .strip{margin-bottom:18px;}
+  .strip:last-child{margin-bottom:0;}
+  .strip-head{
+    display:flex; align-items:baseline; justify-content:space-between;
+    margin-bottom:10px; padding-bottom:6px; border-bottom:1px solid var(--line);
+  }
+  .strip-role{font-family:var(--mono); font-size:9.5px; letter-spacing:0.1em; color:var(--dimmer); text-transform:uppercase;}
+  .strip-name{font-family:var(--mono); font-size:12.5px; font-weight:600; letter-spacing:0.02em; color:var(--text);}
+
+  .ctrl{margin-bottom:12px;}
+  .ctrl:last-child{margin-bottom:0;}
+  .ctrl-row{display:flex; justify-content:space-between; align-items:baseline; margin-bottom:5px;}
+  .ctrl-label{font-size:12px; color:var(--dim);}
+  .ctrl-val{font-family:var(--mono); font-size:12px; color:var(--text); font-weight:500; min-width:36px; text-align:right;}
+
+  input[type=range]{
+    -webkit-appearance:none; appearance:none;
+    width:100%; height:4px; border-radius:2px;
+    background:var(--line-bright); outline:none; cursor:pointer;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none; width:15px; height:15px; border-radius:50%;
+    background:var(--text); cursor:pointer; border:2px solid var(--void);
+    box-shadow:0 0 0 1px var(--line-bright);
+  }
+  input[type=range]::-moz-range-thumb{
+    width:13px; height:13px; border-radius:50%;
+    background:var(--text); cursor:pointer; border:2px solid var(--void);
+  }
+
+  .toggle-row{display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;}
+  .toggle-label{font-size:12px; color:var(--dim);}
+  .switch{position:relative; width:38px; height:20px; flex-shrink:0;}
+  .switch input{opacity:0; width:0; height:0;}
+  .slider-switch{
+    position:absolute; cursor:pointer; inset:0; background:var(--line-bright);
+    border-radius:20px; transition:.2s;
+  }
+  .slider-switch::before{
+    content:''; position:absolute; height:14px; width:14px; left:3px; top:3px;
+    background:var(--dim); border-radius:50%; transition:.2s;
+  }
+  input:checked + .slider-switch{background:var(--firm-a-dim);}
+  input:checked + .slider-switch::before{transform:translateX(18px); background:var(--firm-a);}
+
+  .seg{display:flex; gap:6px;}
+  .seg button{
+    flex:1; padding:6px 0; font-family:var(--mono); font-size:11px; font-weight:600;
+    border:1px solid var(--line-bright); background:var(--panel-raised); color:var(--dim);
+    border-radius:6px; cursor:pointer; transition:.15s;
+  }
+  .seg button.active-a{background:var(--firm-a-dim); border-color:var(--firm-a); color:var(--firm-a);}
+  .seg button.active-b{background:var(--firm-b-dim); border-color:var(--firm-b); color:var(--firm-b);}
+
+  /* ---------- Right side ---------- */
+  .right{display:flex; flex-direction:column; gap:16px;}
+
+  .readout-row{display:grid; grid-template-columns:1fr 1fr 1.3fr; gap:16px;}
+  @media (max-width:700px){.readout-row{grid-template-columns:1fr;}}
+
+  .readout-card{background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:14px 16px;}
+  .readout-title{font-family:var(--mono); font-size:9.5px; letter-spacing:0.1em; text-transform:uppercase; color:var(--dimmer); margin-bottom:8px;}
+
+  .share-line{display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;}
+  .share-line:last-child{margin-bottom:0;}
+  .dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:8px;}
+  .firm-tag{display:flex; align-items:center; font-size:13px; color:var(--dim);}
+  .share-val{font-family:var(--mono); font-size:19px; font-weight:700;}
+
+  /* gauge */
+  .gauge-wrap{display:flex; flex-direction:column; gap:8px;}
+  .gauge-bar{position:relative; height:10px; background:var(--panel-raised); border-radius:6px; overflow:visible; border:1px solid var(--line-bright);}
+  .gauge-fill{position:absolute; top:0; bottom:0; border-radius:6px; transition:width .3s, left .3s, background .3s;}
+  .gauge-zero{position:absolute; top:-4px; bottom:-4px; width:2px; background:var(--dimmer); left:50%;}
+  .verdict{
+    font-family:var(--mono); font-weight:700; font-size:15px; letter-spacing:0.04em;
+    padding:3px 10px; border-radius:5px; display:inline-block; width:fit-content;
+  }
+  .verdict.tips{background:rgba(255,79,110,0.12); color:var(--danger); border:1px solid rgba(255,79,110,0.35);}
+  .verdict.holds{background:rgba(79,227,196,0.1); color:var(--firm-a); border:1px solid rgba(79,227,196,0.35);}
+  .lambda-val{font-family:var(--mono); font-size:11px; color:var(--dim); margin-top:2px;}
+
+  .clock{font-family:var(--mono); font-size:12px; color:var(--dim);}
+
+  /* ---------- Plot ---------- */
+  .plot-panel{background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:16px; flex:1; display:flex; flex-direction:column;}
+  .plot-head{display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-wrap:wrap; gap:8px;}
+  .plot-title{font-family:var(--mono); font-size:12px; color:var(--dim); letter-spacing:0.03em;}
+  .legend{display:flex; gap:16px; flex-wrap:wrap;}
+  .legend-item{display:flex; align-items:center; gap:6px; font-size:11.5px; color:var(--dim); font-family:var(--mono);}
+  .legend-swatch{width:14px; height:3px; border-radius:2px;}
+  .legend-swatch.dashed{background:none; border-top:2px dashed var(--dim); height:0; width:16px;}
+
+  canvas{width:100%; display:block; border-radius:6px;}
+
+  .transport{display:flex; align-items:center; gap:10px; margin-top:12px; flex-wrap:wrap;}
+  .btn{
+    font-family:var(--mono); font-size:12px; font-weight:600; letter-spacing:0.03em;
+    padding:8px 16px; border-radius:7px; border:1px solid var(--line-bright);
+    background:var(--panel-raised); color:var(--text); cursor:pointer; transition:.15s;
+  }
+  .btn:active{transform:scale(0.97);}
+  .btn.primary{background:var(--firm-a-dim); border-color:var(--firm-a); color:var(--firm-a);}
+  .btn.ghost{color:var(--dim);}
+  .speed-wrap{display:flex; align-items:center; gap:8px; margin-left:auto;}
+  .speed-wrap label{font-size:11px; color:var(--dimmer); font-family:var(--mono);}
+  .speed-wrap input{width:80px;}
+
+  .detect-flag{
+    font-family:var(--mono); font-size:11.5px; color:var(--danger); margin-top:8px;
+    display:none; align-items:center; gap:6px;
+  }
+  .detect-flag.show{display:flex;}
+  .detect-flag::before{content:'▲'; font-size:9px;}
+
+  footer{margin-top:22px; padding-top:16px; border-top:1px solid var(--line); color:var(--dimmer); font-size:11.5px; line-height:1.7; font-family:var(--mono);}
+  footer b{color:var(--dim);}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="eyebrow">Dynamical systems instrument · single market, two firms</div>
+    <h1>TIPPING <span>— preferential attachment, tipping &amp; collapse</span></h1>
+    <div class="sub">A live replicator-dynamics model. Adjust the structural terms on the left and watch whether market share settles at an even split or tips to a corner — and what happens when one firm fakes its numbers to get there.</div>
+  </header>
+
+  <div class="grid">
+
+    <!-- ============ CONTROLS ============ -->
+    <div class="panel">
+
+      <div class="strip">
+        <div class="strip-head">
+          <span class="strip-name">Network effect</span>
+          <span class="strip-role">role 1 · self</span>
+        </div>
+        <div class="ctrl">
+          <div class="ctrl-row"><span class="ctrl-label">β — externality strength</span><span class="ctrl-val" id="v-beta">0.90</span></div>
+          <input type="range" id="beta" min="0" max="2" step="0.01" value="0.9">
+        </div>
+        <div class="ctrl">
+          <div class="ctrl-row"><span class="ctrl-label">γ — attachment curvature</span><span class="ctrl-val" id="v-gamma">1.60</span></div>
+          <input type="range" id="gamma" min="0.3" max="3" step="0.01" value="1.6">
+        </div>
+      </div>
+
+      <div class="strip">
+        <div class="strip-head">
+          <span class="strip-name">Friction</span>
+          <span class="strip-role">role 1b + 2</span>
+        </div>
+        <div class="ctrl">
+          <div class="ctrl-row"><span class="ctrl-label">δ — congestion</span><span class="ctrl-val" id="v-delta">0.35</span></div>
+          <input type="range" id="delta" min="0" max="2" step="0.01" value="0.35">
+        </div>
+        <div class="ctrl">
+          <div class="ctrl-row"><span class="ctrl-label">μ — exclusivity (1 = no multi-homing)</span><span class="ctrl-val" id="v-mu">0.85</span></div>
+          <input type="range" id="mu" min="0" max="1" step="0.01" value="0.85">
+        </div>
+      </div>
+
+      <div class="strip">
+        <div class="strip-head">
+          <span class="strip-name">Exogenous shock</span>
+          <span class="strip-role">role 3 · forcing ε(t)</span>
+        </div>
+        <div class="ctrl-row" style="margin-bottom:8px;">
+          <span class="ctrl-label">target firm</span>
+        </div>
+        <div class="seg" style="margin-bottom:12px;">
+          <button id="seg-a" class="active-a">FIRM A</button>
+          <button id="seg-b">FIRM B</button>
+        </div>
+        <div class="ctrl">
+          <div class="ctrl-row"><span class="ctrl-label">magnitude</span><span class="ctrl-val" id="v-shockmag">0.00</span></div>
+          <input type="range" id="shockmag" min="0" max="1.5" step="0.01" value="0">
+        </div>
+        <div class="ctrl">
+          <div class="ctrl-row"><span class="ctrl-label">start (t)</span><span class="ctrl-val" id="v-shockstart">10</span></div>
+          <input type="range" id="shockstart" min="0" max="60" step="1" value="10">
+        </div>
+        <div class="ctrl">
+          <div class="ctrl-row"><span class="ctrl-label">duration</span><span class="ctrl-val" id="v-shockdur">8</span></div>
+          <input type="range" id="shockdur" min="1" max="40" step="1" value="8">
+        </div>
+      </div>
+
+      <div class="strip">
+        <div class="strip-head">
+          <span class="strip-name">Noise</span>
+          <span class="strip-role">role 6 · η(t)</span>
+        </div>
+        <div class="ctrl">
+          <div class="ctrl-row"><span class="ctrl-label">η — perturbation strength</span><span class="ctrl-val" id="v-noise">0.02</span></div>
+          <input type="range" id="noise" min="0" max="0.08" step="0.001" value="0.02">
+        </div>
+      </div>
+
+      <div class="strip">
+        <div class="strip-head">
+          <span class="strip-name">Perception / fraud</span>
+          <span class="strip-role">bias b(t), role 5</span>
+        </div>
+        <div class="toggle-row">
+          <span class="toggle-label">Firm A inflates its numbers</span>
+          <label class="switch">
+            <input type="checkbox" id="fraudToggle">
+            <span class="slider-switch"></span>
+          </label>
+        </div>
+        <div class="ctrl">
+          <div class="ctrl-row"><span class="ctrl-label">g — bias growth rate</span><span class="ctrl-val" id="v-g">0.05</span></div>
+          <input type="range" id="gRate" min="0" max="0.15" step="0.001" value="0.05">
+        </div>
+        <div class="ctrl">
+          <div class="ctrl-row"><span class="ctrl-label">ρ — truth leak rate</span><span class="ctrl-val" id="v-rho">0.04</span></div>
+          <input type="range" id="rho" min="0" max="0.2" step="0.001" value="0.04">
+        </div>
+      </div>
+
+      <div class="strip">
+        <div class="strip-head">
+          <span class="strip-name">Initial condition</span>
+          <span class="strip-role">t = 0</span>
+        </div>
+        <div class="ctrl">
+          <div class="ctrl-row"><span class="ctrl-label">Firm A starting share</span><span class="ctrl-val" id="v-init">0.52</span></div>
+          <input type="range" id="initShare" min="0.01" max="0.99" step="0.01" value="0.52">
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ============ RIGHT SIDE ============ -->
+    <div class="right">
+
+      <div class="readout-row">
+
+        <div class="readout-card">
+          <div class="readout-title">Share, live</div>
+          <div class="share-line">
+            <span class="firm-tag"><span class="dot" style="background:var(--firm-a)"></span>Firm A</span>
+            <span class="share-val" id="sa-val" style="color:var(--firm-a)">52%</span>
+          </div>
+          <div class="share-line">
+            <span class="firm-tag"><span class="dot" style="background:var(--firm-b)"></span>Firm B</span>
+            <span class="share-val" id="sb-val" style="color:var(--firm-b)">48%</span>
+          </div>
+        </div>
+
+        <div class="readout-card">
+          <div class="readout-title">Clock</div>
+          <div class="clock" id="clock">t = 0.0</div>
+          <div class="detect-flag" id="detectFlag">FRAUD DETECTED at t=—</div>
+        </div>
+
+        <div class="readout-card">
+          <div class="readout-title">Tipping pressure · λ = βγμ^γ(½)^(γ−1) − δ</div>
+          <div class="gauge-wrap">
+            <div class="gauge-bar">
+              <div class="gauge-zero"></div>
+              <div class="gauge-fill" id="gaugeFill"></div>
+            </div>
+            <div>
+              <span class="verdict" id="verdict">—</span>
+              <div class="lambda-val" id="lambdaVal">λ = 0.00</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="plot-panel">
+        <div class="plot-head">
+          <span class="plot-title">MARKET SHARE OVER TIME</span>
+          <div class="legend">
+            <span class="legend-item"><span class="legend-swatch" style="background:var(--firm-a)"></span>Firm A (true)</span>
+            <span class="legend-item"><span class="legend-swatch dashed"></span>Firm A (perceived)</span>
+            <span class="legend-item"><span class="legend-swatch" style="background:var(--firm-b)"></span>Firm B (true)</span>
+          </div>
+        </div>
+        <canvas id="plot" height="380"></canvas>
+        <div class="transport">
+          <button class="btn primary" id="playBtn">⏵ Run</button>
+          <button class="btn ghost" id="resetBtn">↺ Reset</button>
+          <div class="speed-wrap">
+            <label>speed</label>
+            <input type="range" id="speed" min="1" max="6" step="1" value="3">
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <footer>
+    <b>How to read it:</b> two firms split one market (sA + sB = 1). Growth rate depends on each firm's own share (network effect, curved by γ), pulled down by congestion (δ), and reduced if users can cheaply use both firms at once (low μ dampens the effect). The gauge shows whether the 50/50 point is a stable rest point (HOLDS) or a saddle that gets thrown to a corner (TIPS) — this is evaluated at the symmetric point regardless of your chosen starting share. Turn on "Firm A inflates its numbers" to watch growth get driven by a perceived share ŝ that drifts from the true one — and what happens when the gap gets caught.
+  </footer>
+
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  // ---------- DOM ----------
+  const el = id => document.getElementById(id);
+  const inputs = {
+    beta: el('beta'), gamma: el('gamma'), delta: el('delta'), mu: el('mu'),
+    shockmag: el('shockmag'), shockstart: el('shockstart'), shockdur: el('shockdur'),
+    noise: el('noise'), gRate: el('gRate'), rho: el('rho'), initShare: el('initShare'),
+    speed: el('speed')
+  };
+  const labels = {
+    beta: el('v-beta'), gamma: el('v-gamma'), delta: el('v-delta'), mu: el('v-mu'),
+    shockmag: el('v-shockmag'), shockstart: el('v-shockstart'), shockdur: el('v-shockdur'),
+    noise: el('v-noise'), gRate: el('v-g'), rho: el('v-rho'), initShare: el('v-init')
+  };
+  const segA = el('seg-a'), segB = el('seg-b');
+  const fraudToggle = el('fraudToggle');
+  const playBtn = el('playBtn'), resetBtn = el('resetBtn');
+  const canvas = el('plot');
+  const ctx = canvas.getContext('2d');
+  const saVal = el('sa-val'), sbVal = el('sb-val'), clockEl = el('clock');
+  const gaugeFill = el('gaugeFill'), verdictEl = el('verdict'), lambdaValEl = el('lambdaVal');
+  const detectFlag = el('detectFlag');
+
+  let shockTarget = 'A';
+  segA.addEventListener('click', ()=>{ shockTarget='A'; segA.classList.add('active-a'); segB.classList.remove('active-b'); });
+  segB.addEventListener('click', ()=>{ shockTarget='B'; segB.classList.add('active-b'); segA.classList.remove('active-a'); });
+
+  // ---------- Formatting ----------
+  function fmt(id, val){
+    const decimals = {beta:2,gamma:2,delta:2,mu:2,shockmag:2,noise:3,gRate:3,rho:3,initShare:2}[id];
+    if (id==='shockstart' || id==='shockdur') { labels[id].textContent = val; return; }
+    labels[id].textContent = Number(val).toFixed(decimals);
+  }
+  Object.keys(inputs).forEach(id=>{
+    if (id==='speed') return;
+    inputs[id].addEventListener('input', ()=>{ fmt(id, inputs[id].value); updateGauge(); });
+    fmt(id, inputs[id].value);
+  });
+
+  // ---------- Simulation state ----------
+  const DT = 0.08;
+  let t = 0;
+  let sA = parseFloat(inputs.initShare.value);
+  let bA = 0;               // perception bias on firm A
+  let detected = false;
+  let detectTime = null;
+  let history = [];         // {t, sA, sB, hatA}
+  let running = false;
+  let rafId = null;
+
+  function paramsSnapshot(){
+    return {
+      beta: parseFloat(inputs.beta.value),
+      gamma: parseFloat(inputs.gamma.value),
+      delta: parseFloat(inputs.delta.value),
+      mu: parseFloat(inputs.mu.value),
+      shockmag: parseFloat(inputs.shockmag.value),
+      shockstart: parseFloat(inputs.shockstart.value),
+      shockdur: parseFloat(inputs.shockdur.value),
+      noise: parseFloat(inputs.noise.value),
+      gRate: parseFloat(inputs.gRate.value),
+      rho: parseFloat(inputs.rho.value),
+      fraud: fraudToggle.checked
+    };
+  }
+
+  function eps(firm, p){
+    // rectangular exogenous shock, active only on target firm
+    if (shockTarget !== firm) return 0;
+    if (t >= p.shockstart && t <= p.shockstart + p.shockdur) return p.shockmag;
+    return 0;
+  }
+
+  function step(){
+    const p = paramsSnapshot();
+    const sB = 1 - sA;
+
+    // perception wedge (fraud only ever applied to firm A here)
+    if (p.fraud && !detected){
+      bA += (p.gRate - p.rho*bA) * DT;
+      const hazard = 6.0 * bA * bA; // convex detection hazard
+      const pDetect = 1 - Math.exp(-hazard*DT);
+      if (Math.random() < pDetect){
+        detected = true;
+        detectTime = t;
+        detectFlag.textContent = 'FRAUD DETECTED at t=' + t.toFixed(1);
+        detectFlag.classList.add('show');
+      }
+    }
+    if (detected){
+      // snap back with overshoot, then decay the overshoot away
+      bA += (-0.6 - bA) * 0.15 * DT * 10; // fast pull toward negative overshoot then relax
+      bA += (0 - bA) * 0.02 * DT; // slow relax toward 0 after
+    }
+    if (!p.fraud) bA *= 0; // if turned off, no wedge
+
+    const hatA = Math.max(0, Math.min(1.2, sA + bA));
+
+    const fA = p.beta*Math.pow(p.mu*hatA, p.gamma) - p.delta*sA + eps('A', p) + (Math.random()-0.5)*2*p.noise;
+    const fB = p.beta*Math.pow(p.mu*sB, p.gamma)   - p.delta*sB + eps('B', p) + (Math.random()-0.5)*2*p.noise;
+    const fbar = sA*fA + sB*fB;
+
+    sA = sA + sA*(fA - fbar)*DT;
+    sA = Math.max(0.002, Math.min(0.998, sA));
+    t += DT;
+
+    history.push({t, sA, sB: 1-sA, hatA: p.fraud ? hatA : null});
+    if (history.length > 2000) history.shift();
+
+    saVal.textContent = Math.round(sA*100) + '%';
+    sbVal.textContent = Math.round((1-sA)*100) + '%';
+    clockEl.textContent = 't = ' + t.toFixed(1);
+  }
+
+  // ---------- Stability gauge ----------
+  function updateGauge(){
+    const beta = parseFloat(inputs.beta.value);
+    const gamma = parseFloat(inputs.gamma.value);
+    const delta = parseFloat(inputs.delta.value);
+    const mu = parseFloat(inputs.mu.value);
+    const lambda = beta*gamma*Math.pow(mu, gamma)*Math.pow(0.5, gamma-1) - delta;
+    lambdaValEl.textContent = 'λ = ' + lambda.toFixed(2);
+    const clamped = Math.max(-1.5, Math.min(1.5, lambda));
+    const pct = ((clamped + 1.5) / 3) * 100; // 0..100 across [-1.5,1.5]
+    if (lambda > 0){
+      verdictEl.textContent = 'TIPS';
+      verdictEl.className = 'verdict tips';
+      gaugeFill.style.background = 'linear-gradient(90deg, var(--firm-a-dim), var(--danger))';
+      gaugeFill.style.left = '50%';
+      gaugeFill.style.width = (pct-50) + '%';
+    } else {
+      verdictEl.textContent = 'HOLDS';
+      verdictEl.className = 'verdict holds';
+      gaugeFill.style.background = 'var(--firm-a)';
+      gaugeFill.style.left = pct + '%';
+      gaugeFill.style.width = (50-pct) + '%';
+    }
+  }
+
+  // ---------- Drawing ----------
+  function resizeCanvas(){
+    const rect = canvas.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = rect.width * dpr;
+    canvas.height = 380 * dpr;
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+  }
+
+  function draw(){
+    const W = canvas.getBoundingClientRect().width;
+    const H = 380;
+    ctx.clearRect(0,0,W,H);
+
+    const padL = 34, padR = 10, padT = 14, padB = 24;
+    const plotW = W - padL - padR;
+    const plotH = H - padT - padB;
+
+    // grid
+    ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+    ctx.lineWidth = 1;
+    for(let f=0; f<=4; f++){
+      const y = padT + plotH*(f/4);
+      ctx.beginPath(); ctx.moveTo(padL,y); ctx.lineTo(padL+plotW,y); ctx.stroke();
+    }
+    // midline (50%)
+    ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+    ctx.setLineDash([3,4]);
+    const yMid = padT + plotH*0.5;
+    ctx.beginPath(); ctx.moveTo(padL,yMid); ctx.lineTo(padL+plotW,yMid); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // y labels
+    ctx.fillStyle = 'rgba(255,255,255,0.35)';
+    ctx.font = '10px JetBrains Mono, monospace';
+    ctx.textAlign = 'right';
+    ['100%','75%','50%','25%','0%'].forEach((lab,i)=>{
+      ctx.fillText(lab, padL-6, padT + plotH*(i/4) + 3);
+    });
+
+    if (history.length < 2){ return; }
+
+    const tMax = Math.max(history[history.length-1].t, 20);
+    const tMin = Math.max(0, tMax - 60); // rolling 60-unit window
+    const visible = history.filter(h => h.t >= tMin);
+    if (visible.length < 2) return;
+
+    const xOf = h => padL + plotW * ((h.t - tMin) / Math.max(0.001, (tMax - tMin)));
+    const yOf = v => padT + plotH * (1 - v);
+
+    // filled area for firm A (bottom) — represents stacked share
+    ctx.beginPath();
+    ctx.moveTo(xOf(visible[0]), padT+plotH);
+    visible.forEach(h => ctx.lineTo(xOf(h), yOf(h.sA)));
+    ctx.lineTo(xOf(visible[visible.length-1]), padT+plotH);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(79,227,196,0.10)';
+    ctx.fill();
+
+    // firm A line
+    ctx.beginPath();
+    visible.forEach((h,i)=> i===0 ? ctx.moveTo(xOf(h), yOf(h.sA)) : ctx.lineTo(xOf(h), yOf(h.sA)));
+    ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--firm-a').trim();
+    ctx.lineWidth = 2.2;
+    ctx.stroke();
+
+    // firm B line
+    ctx.beginPath();
+    visible.forEach((h,i)=> i===0 ? ctx.moveTo(xOf(h), yOf(h.sB)) : ctx.lineTo(xOf(h), yOf(h.sB)));
+    ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--firm-b').trim();
+    ctx.lineWidth = 2.2;
+    ctx.stroke();
+
+    // perceived ghost line for A
+    if (visible.some(h=>h.hatA!==null)){
+      ctx.beginPath();
+      ctx.setLineDash([4,4]);
+      let started = false;
+      visible.forEach(h=>{
+        if (h.hatA===null) return;
+        if (!started){ ctx.moveTo(xOf(h), yOf(h.hatA)); started = true; }
+        else ctx.lineTo(xOf(h), yOf(h.hatA));
+      });
+      ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+      ctx.lineWidth = 1.4;
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    // detection marker
+    if (detectTime !== null && detectTime >= tMin){
+      const dx = padL + plotW * ((detectTime - tMin)/Math.max(0.001,(tMax-tMin)));
+      ctx.beginPath();
+      ctx.moveTo(dx, padT);
+      ctx.lineTo(dx, padT+plotH);
+      ctx.strokeStyle = 'rgba(255,79,110,0.6)';
+      ctx.lineWidth = 1.4;
+      ctx.setLineDash([2,3]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+  }
+
+  // ---------- Loop ----------
+  function loop(){
+    const speed = parseInt(inputs.speed.value,10);
+    for(let i=0;i<speed;i++) step();
+    draw();
+    updateGauge();
+    if (running) rafId = requestAnimationFrame(loop);
+  }
+
+  function reset(){
+    running = false;
+    if (rafId) cancelAnimationFrame(rafId);
+    t = 0;
+    sA = parseFloat(inputs.initShare.value);
+    bA = 0;
+    detected = false;
+    detectTime = null;
+    history = [{t:0, sA, sB:1-sA, hatA:null}];
+    saVal.textContent = Math.round(sA*100)+'%';
+    sbVal.textContent = Math.round((1-sA)*100)+'%';
+    clockEl.textContent = 't = 0.0';
+    detectFlag.classList.remove('show');
+    playBtn.textContent = '⏵ Run';
+    resizeCanvas();
+    draw();
+    updateGauge();
+  }
+
+  playBtn.addEventListener('click', ()=>{
+    running = !running;
+    playBtn.textContent = running ? '⏸ Pause' : '⏵ Run';
+    if (running) loop();
+    else if (rafId) cancelAnimationFrame(rafId);
+  });
+  resetBtn.addEventListener('click', reset);
+  inputs.initShare.addEventListener('input', ()=>{ if(!running) reset(); });
+  window.addEventListener('resize', ()=>{ resizeCanvas(); draw(); });
+
+  reset();
+})();
+</script>
+</body>
+</html>
